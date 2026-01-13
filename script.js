@@ -243,11 +243,11 @@
                 },
                 benevole: {
                     title: "Engagement associatif",
-                    meta: ["2017 - Présent", "Association Sportive | HandballClub de Sanvigne", "Bénévolat"],
+                    meta: ["2017 - Présent", "Association Sportive | Handball Club de Sanvignes", "Bénévolat"],
                     sections: [
                         {
                             title: "Rôle et responsabilités",
-                            content: "Participation active à l'organisation d'événements Sportif, aide aux personnes. Contribution à la vie associative."
+                            content: "Participation active à l'organisation d'événements sportifs, aide aux personnes. Contribution à la vie associative."
                         },
                         {
                             title: "Projets menés",
