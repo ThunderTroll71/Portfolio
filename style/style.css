@@ -5,10 +5,7 @@
             scroll-behavior: smooth;
             font-family: "Inter", Arial, sans-serif;
         }
-        .cv-object {
-            width: 100%;
-            height: 600px;
-        }
+
         .photo-hero {
             width: 280px;
             height: 280px;
