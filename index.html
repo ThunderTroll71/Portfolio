@@ -43,7 +43,7 @@
             <div class="hero-text">
                 <h1>Prost Raphaël</h1>
                 <p class="subtitle">Étudiant en BUT Réseaux et Télécommunications</p>
-                <p>Passionné par les technologies réseau, la cybersécurité et le développement web, je poursuis actuellement mes études à l’IUT d’Aubière. Je viens de Blanzy, en sâone-et-loire (71), j’ai 18 ans et je souhaite développer une expertise complète dans le domaine des télécommunications et réseaux afin de devenir un professionnel polyvalent et compétent. Au sein de ma formation, j’explore les bases essentielles des réseaux et des télécommunications à travers des cours, des travaux dirigés, des travaux pratiques et des projets concrets. Cette approche me permet de consolider des connaissances solides que je pourrai approfondir et appliquer dans le monde professionnel. Curieux et rigoureux, je m’efforce de progresser chaque jour pour relever les défis technologiques actuels. Je prévois d’effectuer une alternance dès ma deuxième année, à partir de septembre 2026, avec un rythme d’un mois en entreprise et un mois à l’IUT. Cette expérience sera l’occasion de découvrir le milieu professionnel, d’acquérir de nouvelles compétences et de mettre en pratique ce que j’ai appris.</p>
+                <p>Passionné par les technologies réseau, la cybersécurité et le développement web, je poursuis actuellement mes études à l'IUT d'Aubière. Je viens de Blanzy, en sâone-et-loire (71), j'ai 18 ans et je souhaite développer une expertise complète dans le domaine des télécommunications et réseaux afin de devenir un professionnel polyvalent et compétent. Au sein de ma formation, j'explore les bases essentielles des réseaux et des télécommunications à travers des cours, des travaux dirigés, des travaux pratiques et des projets concrets. Cette approche me permet de consolider des connaissances solides que je pourrai approfondir et appliquer dans le monde professionnel. Curieux et rigoureux, je m'efforce de progresser chaque jour pour relever les défis technologiques actuels. Je prévois d'effectuer une alternance dès ma deuxième année, à partir de septembre 2026, avec un rythme d'un mois en entreprise et un mois à l'IUT. Cette expérience sera l'occasion de découvrir le milieu professionnel, d'acquérir de nouvelles compétences et de mettre en pratique ce que j'ai appris.</p>
                 <br>
                 <p>À travers ce portfolio, je vous invite à découvrir mon parcours, mes compétences et les projets qui m'animent au quotidien.</p>
             </div>
@@ -79,13 +79,22 @@
         </div>
     </section>
 
-    <!-- SECTION COMPÉTENCES -->
-    <!-- AJOUTER LES QUALITÉS ET AJOUTER AUSSI LES LV1/ LV2-->
+    <!-- SECTION COMPÉTENCES / QUALITÉS -->
     <section id="competences" class="section reveal">
-        <h2>Mes compétences</h2>
-        <p style="margin-bottom: 30px;">Un ensemble de compétences techniques et humaines acquises au fil de mes expériences.</p>
-        
-        <div class="competence-grid">
+        <h2 id="section-toggle-title">Mes compétences</h2>
+        <p style="margin-bottom: 20px;">Un ensemble de compétences techniques et humaines acquises au fil de mes expériences.</p>
+
+        <!-- TOGGLE PILL -->
+        <div style="display: flex; justify-content: center; margin-bottom: 36px;">
+            <div class="toggle-track" id="toggle-competences">
+                <div class="toggle-pill-slider" id="toggle-pill"></div>
+                <div class="toggle-option active" id="opt-competences" onclick="switchSection('competences')">Compétences</div>
+                <div class="toggle-option" id="opt-qualites" onclick="switchSection('qualites')">Qualités</div>
+            </div>
+        </div>
+
+        <!-- PANEL COMPÉTENCES -->
+        <div class="competence-grid toggle-panel" id="panel-competences">
             <div class="competence-card card reveal" data-type="competence" data-id="reseau">
                 <h3>🌐 Réseau</h3>
                 <p>Configuration et administration de réseaux d'entreprise, maîtrise des protocoles TCP/IP, routage, commutation et sécurisation des infrastructures.</p>
@@ -101,6 +110,34 @@
             <div class="competence-card card reveal" data-type="competence" data-id="systemes">
                 <h3>🖥️ Systèmes</h3>
                 <p>Administration de systèmes Linux et Windows Server, virtualisation, gestion des services et maintenance d'ordinateur IT.</p>
+            </div>
+        </div>
+
+        <!-- PANEL QUALITÉS -->
+        <div class="qualite-grid toggle-panel" id="panel-qualites" style="display:none;">
+            <div class="qualite-card card reveal" data-type="qualite" data-id="rigueur">
+                <h3>🎯 Rigoureux</h3>
+                <p>Méthodique et précis dans mon travail, je m'assure de la qualité de chaque rendu et respecte les délais fixés.</p>
+            </div>
+            <div class="qualite-card card reveal" data-type="qualite" data-id="equipe">
+                <h3>🤝 Esprit d'équipe</h3>
+                <p>Collaboratif et à l'écoute des autres, j'aime travailler en groupe et contribuer à une dynamique collective positive.</p>
+            </div>
+            <div class="qualite-card card reveal" data-type="qualite" data-id="curiosite">
+                <h3>🔍 Curieux</h3>
+                <p>Toujours en veille technologique, j'aime apprendre de nouvelles choses et explorer des domaines variés au quotidien.</p>
+            </div>
+            <div class="qualite-card card reveal" data-type="qualite" data-id="adaptable">
+                <h3>💡 Adaptable</h3>
+                <p>Capable de m'ajuster rapidement à de nouveaux contextes, outils ou environnements de travail, même sous pression.</p>
+            </div>
+            <div class="qualite-card card reveal" data-type="qualite" data-id="autonome">
+                <h3>🚀 Autonome</h3>
+                <p>Capable de prendre des initiatives et de mener des tâches de façon indépendante tout en sachant quand demander de l'aide.</p>
+            </div>
+            <div class="qualite-card card reveal" data-type="qualite" data-id="communicant">
+                <h3>💬 Communicant</h3>
+                <p>À l'aise à l'oral comme à l'écrit, je sais expliquer clairement des concepts techniques à des interlocuteurs variés.</p>
             </div>
         </div>
     </section>
@@ -182,6 +219,7 @@
             </div>
         </div>
     </section>
+
     <!-- SECTION DIVERS -->
     <section id="divers" class="section reveal">
         <h2>Centres d'intérêt</h2>
@@ -193,13 +231,11 @@
                 <h3>Culture</h3>
                 <p>Passionné de culture, j'aime apprendre des choses variées, je joue à des quizz en ligne et j'essaie d'apprendre au quotidien.</p>
             </div>
-            
             <div class="divers-card card reveal" data-type="divers" data-id="tech">
                 <div class="divers-icon">🎮</div>
                 <h3>Jeux vidéo</h3>
                 <p>Les jeux vidéo sont une source d'inspiration et de détente pour moi. J'aime explorer des univers créatifs et résoudre des défis complexes dans des environnements immersifs.</p>
             </div>
-            
             <div class="divers-card card reveal" data-type="divers" data-id="sport">
                 <div class="divers-icon">⚽</div>
                 <h3>Sport</h3>
@@ -208,10 +244,11 @@
             <div class="divers-card card reveal" data-type="divers" data-id="musique">
                 <div class="divers-icon">🎵</div>
                 <h3>Musique</h3>
-                <p> La musique est une passion qui m'accompagne au quotidien. J'aime découvrir de nouveaux genres musicaux et jouer du piano pendant mon temps libre.</p>
+                <p>La musique est une passion qui m'accompagne au quotidien. J'aime découvrir de nouveaux genres musicaux et jouer du piano pendant mon temps libre.</p>
             </div>
         </div>
     </section>
+
     <section id="mecontacter" class="section reveal">
         <h2>Me Contacter</h2>
         <p style="margin-bottom: 30px;">Vous pouvez trouver les moyens pour me contacter ci-dessous.</p>
@@ -230,6 +267,7 @@
             </div>
         </div>
     </section>
+
     <!-- MODAL -->
     <div id="modal" class="modal">
         <div class="modal-content">
