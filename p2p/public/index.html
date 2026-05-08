@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>P2P Share</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="card">
+  <h1>P2P Share</h1>
+
+  <form id="loginForm">
+    <input id="username" placeholder="Nom d'utilisateur">
+    <input id="password" type="password" placeholder="Mot de passe">
+    <button type="submit">Connexion</button>
+  </form>
+
+  <p id="msg"></p>
+</div>
+
+<script>
+const API_URL = "";
+
+document.getElementById("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const username = document.getElementById("username").value;
+  const password = document.getElementById("password").value;
+
+  const res = await fetch(API_URL + "/api/login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ username, password })
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    document.getElementById("msg").textContent = data.error;
+    return;
+  }
+
+  localStorage.setItem("token", data.token);
+  location.href = "app.html";
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,26 @@
+body {
+  font-family: Arial, sans-serif;
+  background: #f4f4f4;
+  margin: 0;
+  padding: 40px;
+}
+
+.card {
+  background: white;
+  max-width: 700px;
+  margin: auto;
+  padding: 20px;
+  border-radius: 14px;
+}
+
+input, button {
+  padding: 10px;
+  margin: 5px;
+}
+
+.drop-zone {
+  border: 2px dashed #999;
+  padding: 40px;
+  text-align: center;
+  margin-top: 20px;
+}

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>P2P Share</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="card">
+  <h1>P2P Share</h1>
+
+  <button id="createBtn">Créer une session</button>
+
+  <input id="joinCode" maxlength="6" placeholder="CODE">
+  <button id="joinBtn">Rejoindre</button>
+
+  <p>Session : <span id="sessionCode">Aucune</span></p>
+
+  <div id="dropZone" class="drop-zone">
+    Glisse tes fichiers ici
+  </div>
+
+  <input type="file" id="fileInput" multiple>
+
+  <ul id="files"></ul>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://unpkg.com/simple-peer@9/simplepeer.min.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
