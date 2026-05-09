@@ -11,6 +11,15 @@
   <h1>⚡ P2P Share</h1>
   <p class="subtitle">Connexion à votre compte</p>
 
+  <div id="errorBox" style="display:none;margin-bottom:16px;background:rgba(224,92,92,.1);border:1px solid #e05c5c;border-radius:10px;padding:14px 16px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="font-size:16px">⚠️</span>
+      <strong style="font-size:14px;color:#e05c5c" id="errorTitle"></strong>
+    </div>
+    <p style="font-size:13px;color:#c0c0c0;margin-bottom:8px" id="errorDesc"></p>
+    <div style="font-family:monospace;font-size:11px;color:#888;background:rgba(0,0,0,.3);border-radius:6px;padding:8px;word-break:break-all;display:none" id="errorDetail"></div>
+  </div>
+
   <form id="loginForm">
     <div class="field">
       <label>Nom d'utilisateur</label>
@@ -22,19 +31,48 @@
     </div>
     <button type="submit" id="submitBtn">Se connecter</button>
   </form>
-
-  <p id="msg" class="error-msg" style="display:none"></p>
 </div>
 
 <script>
-// URL du backend Railway — à mettre à jour si l'URL change
 const API_URL = "https://siteweb-production-8e78.up.railway.app";
+
+const ERRORS = {
+  network: {
+    title: "Serveur injoignable",
+    desc: "Impossible de contacter le serveur Railway. Vérifiez votre connexion ou réessayez dans quelques secondes."
+  },
+  401: {
+    title: "Identifiants incorrects",
+    desc: "Nom d'utilisateur ou mot de passe invalide."
+  },
+  403: {
+    title: "Accès refusé",
+    desc: "Votre compte n'a pas les droits nécessaires."
+  },
+  500: {
+    title: "Erreur serveur",
+    desc: "Le serveur a rencontré un problème interne. Réessayez dans un moment."
+  },
+  unknown: {
+    title: "Erreur inattendue",
+    desc: "Une erreur inconnue s'est produite."
+  }
+};
+
+function showError(type, detail = "") {
+  const e = ERRORS[type] || ERRORS.unknown;
+  document.getElementById("errorTitle").textContent = e.title;
+  document.getElementById("errorDesc").textContent = e.desc;
+  const detailEl = document.getElementById("errorDetail");
+  detailEl.textContent = detail;
+  detailEl.style.display = detail ? "block" : "none";
+  document.getElementById("errorBox").style.display = "block";
+}
 
 document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const btn = document.getElementById("submitBtn");
-  const msg = document.getElementById("msg");
-  msg.style.display = "none";
+  document.getElementById("errorBox").style.display = "none";
   btn.disabled = true;
   btn.textContent = "Connexion...";
 
@@ -51,8 +89,7 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
     const data = await res.json();
 
     if (!res.ok) {
-      msg.textContent = data.error || "Erreur de connexion";
-      msg.style.display = "block";
+      showError(res.status, `HTTP ${res.status} — ${data.error || "pas de détail"}`);
       btn.disabled = false;
       btn.textContent = "Se connecter";
       return;
@@ -62,11 +99,11 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
     localStorage.setItem("username", data.user.username);
     localStorage.setItem("role", data.user.role);
     localStorage.setItem("apiUrl", API_URL);
-
     location.href = data.user.role === "admin" ? "admin.html" : "app.html";
+
   } catch (err) {
-    msg.textContent = "Impossible de joindre le serveur";
-    msg.style.display = "block";
+    const isNetwork = err instanceof TypeError && err.message.includes("fetch");
+    showError(isNetwork ? "network" : "unknown", err.message);
     btn.disabled = false;
     btn.textContent = "Se connecter";
   }
