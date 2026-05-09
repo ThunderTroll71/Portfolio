@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>P2P Share — Administration</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <span class="logo">⚡ P2P Share</span>
+  <div style="display:flex;gap:10px;align-items:center">
+    <a href="app.html" class="btn-small">Accueil</a>
+    <button class="btn-small" onclick="logout()">Déconnexion</button>
+  </div>
+</div>
+
+<div class="card" style="max-width:760px;margin:30px auto">
+  <h2 style="margin-bottom:6px">Administration</h2>
+  <p class="hint" style="margin-bottom:24px">Gestion des utilisateurs</p>
+
+  <div class="stats-row">
+    <div class="stat-box"><div class="stat-val" id="statUsers">—</div><div class="stat-lbl">Utilisateurs</div></div>
+    <div class="stat-box"><div class="stat-val" id="statSessions">—</div><div class="stat-lbl">Sessions créées</div></div>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <strong>Utilisateurs</strong>
+    <button onclick="openModal()">+ Ajouter</button>
+  </div>
+
+  <table id="usersTable">
+    <thead><tr><th>Nom</th><th>Rôle</th><th>Créé le</th><th></th></tr></thead>
+    <tbody id="usersBody"></tbody>
+  </table>
+</div>
+
+<!-- Modal -->
+<div id="modalBg" class="modal-bg" style="display:none">
+  <div class="modal">
+    <h3 id="modalTitle">Nouvel utilisateur</h3>
+    <input type="hidden" id="modalUserId">
+    <div id="modalFields">
+      <div class="field">
+        <label>Nom d'utilisateur</label>
+        <input type="text" id="modalUsername">
+      </div>
+      <div class="field" id="modalPasswordField">
+        <label id="modalPasswordLabel">Mot de passe</label>
+        <input type="password" id="modalPassword">
+      </div>
+      <div class="field" id="modalRoleField">
+        <label>Rôle</label>
+        <select id="modalRole">
+          <option value="user">Utilisateur</option>
+          <option value="admin">Administrateur</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Annuler</button>
+      <button id="modalSubmit" onclick="submitModal()">Créer</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API_URL = localStorage.getItem("apiUrl") || "https://siteweb-production-8e78.up.railway.app";
+const token = localStorage.getItem("token");
+const role = localStorage.getItem("role");
+
+if (!token || role !== "admin") location.href = "index.html";
+
+let modalMode = "create"; // "create" | "password"
+
+async function api(path, opts = {}) {
+  const res = await fetch(API_URL + path, {
+    ...opts,
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + token, ...opts.headers }
+  });
+  return { res, data: await res.json() };
+}
+
+async function loadAll() {
+  const { data: stats } = await api("/api/admin/stats");
+  document.getElementById("statUsers").textContent = stats.users;
+  document.getElementById("statSessions").textContent = stats.sessions;
+
+  const { data: users } = await api("/api/admin/users");
+  const tbody = document.getElementById("usersBody");
+  tbody.innerHTML = users.map(u => `
+    <tr>
+      <td><strong>${esc(u.username)}</strong></td>
+      <td><span class="role-badge role-${u.role}">${u.role}</span></td>
+      <td>${fmtDate(u.created_at)}</td>
+      <td style="display:flex;gap:6px;justify-content:flex-end">
+        <button class="btn-small" onclick="openPasswordModal(${u.id}, '${esc(u.username)}')">Mot de passe</button>
+        <button class="btn-small danger" onclick="deleteUser(${u.id}, '${esc(u.username)}')">Supprimer</button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function openModal() {
+  modalMode = "create";
+  document.getElementById("modalTitle").textContent = "Nouvel utilisateur";
+  document.getElementById("modalUsername").value = "";
+  document.getElementById("modalPassword").value = "";
+  document.getElementById("modalRole").value = "user";
+  document.getElementById("modalUsername").disabled = false;
+  document.getElementById("modalRoleField").style.display = "block";
+  document.getElementById("modalPasswordLabel").textContent = "Mot de passe";
+  document.getElementById("modalSubmit").textContent = "Créer";
+  document.getElementById("modalUserId").value = "";
+  document.getElementById("modalBg").style.display = "flex";
+}
+
+function openPasswordModal(id, username) {
+  modalMode = "password";
+  document.getElementById("modalTitle").textContent = `Nouveau mot de passe — ${username}`;
+  document.getElementById("modalUserId").value = id;
+  document.getElementById("modalUsername").value = username;
+  document.getElementById("modalUsername").disabled = true;
+  document.getElementById("modalPassword").value = "";
+  document.getElementById("modalRoleField").style.display = "none";
+  document.getElementById("modalPasswordLabel").textContent = "Nouveau mot de passe";
+  document.getElementById("modalSubmit").textContent = "Enregistrer";
+  document.getElementById("modalBg").style.display = "flex";
+}
+
+function closeModal() {
+  document.getElementById("modalBg").style.display = "none";
+}
+
+async function submitModal() {
+  if (modalMode === "create") {
+    const username = document.getElementById("modalUsername").value.trim();
+    const password = document.getElementById("modalPassword").value;
+    const role = document.getElementById("modalRole").value;
+    if (!username || !password) return showToast("Remplissez tous les champs", "error");
+
+    const { res, data } = await api("/api/admin/users", {
+      method: "POST",
+      body: JSON.stringify({ username, password, role })
+    });
+    if (!res.ok) return showToast(data.error, "error");
+    showToast("Utilisateur créé", "success");
+  } else {
+    const id = document.getElementById("modalUserId").value;
+    const password = document.getElementById("modalPassword").value;
+    if (!password || password.length < 6) return showToast("Minimum 6 caractères", "error");
+
+    const { res, data } = await api(`/api/admin/users/${id}/password`, {
+      method: "PUT",
+      body: JSON.stringify({ password })
+    });
+    if (!res.ok) return showToast(data.error, "error");
+    showToast("Mot de passe mis à jour", "success");
+  }
+  closeModal();
+  loadAll();
+}
+
+async function deleteUser(id, username) {
+  if (!confirm(`Supprimer l'utilisateur "${username}" ?`)) return;
+  const { res, data } = await api(`/api/admin/users/${id}`, { method: "DELETE" });
+  if (!res.ok) return showToast(data.error, "error");
+  showToast("Utilisateur supprimé", "success");
+  loadAll();
+}
+
+function logout() { localStorage.clear(); location.href = "index.html"; }
+
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function fmtDate(s) { return new Date(s).toLocaleDateString("fr-FR", { day:"2-digit", month:"short", year:"numeric" }); }
+
+function showToast(msg, type = "info") {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "toast show " + type;
+  setTimeout(() => t.className = "toast", 3000);
+}
+
+document.getElementById("modalBg").addEventListener("click", e => {
+  if (e.target === document.getElementById("modalBg")) closeModal();
+});
+
+loadAll();
+</script>
+</body>
+</html>

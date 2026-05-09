@@ -3,51 +3,74 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>P2P Share</title>
+  <title>P2P Share — Connexion</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
 <div class="card">
-  <h1>P2P Share</h1>
+  <h1>⚡ P2P Share</h1>
+  <p class="subtitle">Connexion à votre compte</p>
 
   <form id="loginForm">
-    <input id="username" placeholder="Nom d'utilisateur">
-    <input id="password" type="password" placeholder="Mot de passe">
-    <button type="submit">Connexion</button>
+    <div class="field">
+      <label>Nom d'utilisateur</label>
+      <input id="username" placeholder="Nom d'utilisateur" autocomplete="username" required>
+    </div>
+    <div class="field">
+      <label>Mot de passe</label>
+      <input id="password" type="password" placeholder="Mot de passe" autocomplete="current-password" required>
+    </div>
+    <button type="submit" id="submitBtn">Se connecter</button>
   </form>
 
-  <p id="msg"></p>
+  <p id="msg" class="error-msg" style="display:none"></p>
 </div>
 
 <script>
-const API_URL = "siteweb-production-8e78.up.railway.app";
+// URL du backend Railway — à mettre à jour si l'URL change
+const API_URL = "https://siteweb-production-8e78.up.railway.app";
 
 document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+  const btn = document.getElementById("submitBtn");
+  const msg = document.getElementById("msg");
+  msg.style.display = "none";
+  btn.disabled = true;
+  btn.textContent = "Connexion...";
 
-  const username = document.getElementById("username").value;
-  const password = document.getElementById("password").value;
+  try {
+    const res = await fetch(API_URL + "/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: document.getElementById("username").value,
+        password: document.getElementById("password").value
+      })
+    });
 
-  const res = await fetch(API_URL + "/api/login", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ username, password })
-  });
+    const data = await res.json();
 
-  const data = await res.json();
+    if (!res.ok) {
+      msg.textContent = data.error || "Erreur de connexion";
+      msg.style.display = "block";
+      btn.disabled = false;
+      btn.textContent = "Se connecter";
+      return;
+    }
 
-  if (!res.ok) {
-    document.getElementById("msg").textContent = data.error;
-    return;
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("username", data.user.username);
+    localStorage.setItem("role", data.user.role);
+    localStorage.setItem("apiUrl", API_URL);
+
+    location.href = data.user.role === "admin" ? "admin.html" : "app.html";
+  } catch (err) {
+    msg.textContent = "Impossible de joindre le serveur";
+    msg.style.display = "block";
+    btn.disabled = false;
+    btn.textContent = "Se connecter";
   }
-
-  localStorage.setItem("token", data.token);
-  location.href = "app.html";
 });
 </script>
-
 </body>
 </html>

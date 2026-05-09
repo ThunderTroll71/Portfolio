@@ -3,33 +3,87 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>P2P Share</title>
+  <title>P2P Share — Session</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<div class="card">
-  <h1>P2P Share</h1>
-
-  <button id="createBtn">Créer une session</button>
-
-  <input id="joinCode" maxlength="6" placeholder="CODE">
-  <button id="joinBtn">Rejoindre</button>
-
-  <p>Session : <span id="sessionCode">Aucune</span></p>
-
-  <div id="dropZone" class="drop-zone">
-    Glisse tes fichiers ici
+<div class="topbar">
+  <span class="logo">⚡ P2P Share</span>
+  <div style="display:flex;align-items:center;gap:10px">
+    <span id="usernameDisplay" class="username-badge"></span>
+    <button class="btn-small" onclick="logout()">Déconnexion</button>
   </div>
-
-  <input type="file" id="fileInput" multiple>
-
-  <ul id="files"></ul>
 </div>
 
-<script src="/socket.io/socket.io.js"></script>
+<div class="card">
+  <!-- Zone création/rejoindre (visible avant connexion P2P) -->
+  <div id="setupZone">
+    <h2>Démarrer un partage</h2>
+    <div class="actions-row">
+      <div class="action-box">
+        <p class="action-title">📤 Créer une session</p>
+        <p class="action-desc">Générez un code et partagez-le</p>
+        <button id="createBtn">Créer</button>
+        <div id="codeDisplay" style="display:none">
+          <div class="code-badge" id="codeText" onclick="copyCode()" title="Cliquer pour copier"></div>
+          <p class="hint">Cliquez sur le code pour copier</p>
+        </div>
+      </div>
+      <div class="separator">ou</div>
+      <div class="action-box">
+        <p class="action-title">📥 Rejoindre une session</p>
+        <p class="action-desc">Entrez le code à 6 caractères</p>
+        <div style="display:flex;gap:8px">
+          <input id="joinCode" maxlength="6" placeholder="ABC123" style="text-transform:uppercase;letter-spacing:3px;text-align:center;font-size:16px">
+          <button id="joinBtn">Rejoindre</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Attente du second pair -->
+  <div id="waitingZone" style="display:none">
+    <div class="status-line">
+      <span class="dot waiting"></span>
+      <span>En attente d'un second utilisateur…</span>
+    </div>
+    <p class="hint">Partagez le code <strong id="waitCode"></strong> avec votre destinataire</p>
+  </div>
+
+  <!-- Zone de transfert (visible une fois connecté) -->
+  <div id="transferZone" style="display:none">
+    <div class="status-line">
+      <span class="dot connected"></span>
+      <span>Connecté avec <strong id="peerName"></strong></span>
+      <button class="btn-small danger" onclick="disconnect()" style="margin-left:auto">Quitter</button>
+    </div>
+
+    <div class="transfer-grid">
+      <!-- Envoyer -->
+      <div>
+        <h3>📤 Envoyer</h3>
+        <div id="dropZone" class="drop-zone" onclick="document.getElementById('fileInput').click()">
+          <input type="file" id="fileInput" multiple style="display:none" onchange="sendFiles(this.files)">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p>Glissez vos fichiers ici<br><small>ou cliquez pour choisir</small></p>
+        </div>
+        <div id="sendList"></div>
+      </div>
+
+      <!-- Recevoir -->
+      <div>
+        <h3>📥 Reçus</h3>
+        <div id="receiveList"><p class="hint" style="text-align:center;padding:20px">En attente de fichiers…</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="https://unpkg.com/simple-peer@9/simplepeer.min.js"></script>
 <script src="app.js"></script>
-
 </body>
 </html>
