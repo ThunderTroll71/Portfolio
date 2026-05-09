@@ -1,4 +1,4 @@
-const API_URL = "";
+const API_URL = "siteweb-production-8e78.up.railway.app";
 const token = localStorage.getItem("token");
 
 const socket = io(API_URL, {
