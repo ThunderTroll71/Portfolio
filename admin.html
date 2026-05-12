@@ -5,6 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PeerPlex — Administration</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+    .tab {
+      padding: 8px 18px; border-radius: 8px 8px 0 0; font-size: 14px; font-weight: 600;
+      cursor: pointer; background: none; border: 1px solid transparent; border-bottom: none;
+      color: var(--text2); transition: all .15s; margin-bottom: -1px;
+    }
+    .tab.active { background: var(--bg2); border-color: var(--border); color: var(--text); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .duration-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 12px;
+      background: rgba(108,99,255,.15); color: var(--accent); font-weight: 600;
+    }
+    .ongoing { background: rgba(78,204,163,.15); color: var(--accent2); }
+    .log-user { font-weight: 600; color: var(--text); }
+    .log-arrow { color: var(--text2); margin: 0 4px; }
+  </style>
 </head>
 <body>
 
@@ -16,24 +34,53 @@
   </div>
 </div>
 
-<div class="card" style="max-width:760px;margin:30px auto">
+<div class="card" style="max-width:820px;margin:30px auto">
   <h2 style="margin-bottom:6px">Administration</h2>
-  <p class="hint" style="margin-bottom:24px">Gestion des utilisateurs</p>
+  <p class="hint" style="margin-bottom:20px">Gestion des utilisateurs et suivi des sessions</p>
 
-  <div class="stats-row">
+  <div class="stats-row" style="grid-template-columns:repeat(3,1fr)">
     <div class="stat-box"><div class="stat-val" id="statUsers">—</div><div class="stat-lbl">Utilisateurs</div></div>
     <div class="stat-box"><div class="stat-val" id="statSessions">—</div><div class="stat-lbl">Sessions créées</div></div>
+    <div class="stat-box"><div class="stat-val" id="statLogs">—</div><div class="stat-lbl">Échanges tracés</div></div>
   </div>
 
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <strong>Utilisateurs</strong>
-    <button onclick="openModal()">+ Ajouter</button>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('users')">👥 Utilisateurs</button>
+    <button class="tab" onclick="switchTab('logs')">📋 Sessions</button>
   </div>
 
-  <table id="usersTable">
-    <thead><tr><th>Nom</th><th>Rôle</th><th>Créé le</th><th></th></tr></thead>
-    <tbody id="usersBody"></tbody>
-  </table>
+  <!-- Onglet Utilisateurs -->
+  <div id="tab-users" class="tab-panel active">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <strong>Utilisateurs</strong>
+      <button onclick="openModal()">+ Ajouter</button>
+    </div>
+    <table>
+      <thead><tr><th>Nom</th><th>Rôle</th><th>Créé le</th><th></th></tr></thead>
+      <tbody id="usersBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Onglet Sessions -->
+  <div id="tab-logs" class="tab-panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <strong>Historique des sessions</strong>
+      <button class="btn-small btn-secondary" onclick="loadLogs()">↻ Actualiser</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Participants</th>
+          <th>Début</th>
+          <th>Durée</th>
+          <th>Statut</th>
+        </tr>
+      </thead>
+      <tbody id="logsBody"></tbody>
+    </table>
+    <p id="logsEmpty" class="hint" style="text-align:center;padding:20px;display:none">Aucune session tracée pour l'instant</p>
+  </div>
 </div>
 
 <!-- Modal -->
@@ -41,22 +88,20 @@
   <div class="modal">
     <h3 id="modalTitle">Nouvel utilisateur</h3>
     <input type="hidden" id="modalUserId">
-    <div id="modalFields">
-      <div class="field">
-        <label>Nom d'utilisateur</label>
-        <input type="text" id="modalUsername">
-      </div>
-      <div class="field" id="modalPasswordField">
-        <label id="modalPasswordLabel">Mot de passe</label>
-        <input type="password" id="modalPassword">
-      </div>
-      <div class="field" id="modalRoleField">
-        <label>Rôle</label>
-        <select id="modalRole">
-          <option value="user">Utilisateur</option>
-          <option value="admin">Administrateur</option>
-        </select>
-      </div>
+    <div class="field">
+      <label>Nom d'utilisateur</label>
+      <input type="text" id="modalUsername">
+    </div>
+    <div class="field">
+      <label id="modalPasswordLabel">Mot de passe</label>
+      <input type="password" id="modalPassword">
+    </div>
+    <div class="field" id="modalRoleField">
+      <label>Rôle</label>
+      <select id="modalRole">
+        <option value="user">Utilisateur</option>
+        <option value="admin">Administrateur</option>
+      </select>
     </div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal()">Annuler</button>
@@ -74,7 +119,7 @@ const role = localStorage.getItem("role");
 
 if (!token || role !== "admin") location.href = "index.html";
 
-let modalMode = "create"; // "create" | "password"
+let modalMode = "create";
 
 async function api(path, opts = {}) {
   const res = await fetch(API_URL + path, {
@@ -84,14 +129,23 @@ async function api(path, opts = {}) {
   return { res, data: await res.json() };
 }
 
+// ── Onglets ───────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll(".tab").forEach((t, i) => t.classList.toggle("active", ["users","logs"][i] === name));
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+  document.getElementById("tab-" + name).classList.add("active");
+  if (name === "logs") loadLogs();
+}
+
+// ── Stats + Users ─────────────────────────────────────────────────
 async function loadAll() {
   const { data: stats } = await api("/api/admin/stats");
   document.getElementById("statUsers").textContent = stats.users;
   document.getElementById("statSessions").textContent = stats.sessions;
+  document.getElementById("statLogs").textContent = stats.logs;
 
   const { data: users } = await api("/api/admin/users");
-  const tbody = document.getElementById("usersBody");
-  tbody.innerHTML = users.map(u => `
+  document.getElementById("usersBody").innerHTML = users.map(u => `
     <tr>
       <td><strong>${esc(u.username)}</strong></td>
       <td><span class="role-badge role-${u.role}">${u.role}</span></td>
@@ -104,6 +158,39 @@ async function loadAll() {
   `).join("");
 }
 
+// ── Logs sessions ─────────────────────────────────────────────────
+async function loadLogs() {
+  const { data: logs } = await api("/api/admin/session-logs");
+  const tbody = document.getElementById("logsBody");
+  const empty = document.getElementById("logsEmpty");
+
+  if (!logs.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
+  empty.style.display = "none";
+
+  tbody.innerHTML = logs.map(l => `
+    <tr>
+      <td><code style="font-family:monospace;font-size:13px;color:var(--accent2)">${esc(l.code)}</code></td>
+      <td>
+        <span class="log-user">${esc(l.user_a)}</span>
+        <span class="log-arrow">⇄</span>
+        <span class="log-user">${l.user_b ? esc(l.user_b) : '<span style="color:var(--text2)">—</span>'}</span>
+      </td>
+      <td style="font-size:13px">${fmtDateTime(l.started_at)}</td>
+      <td>${l.duration_seconds != null ? fmtDuration(l.duration_seconds) : '<span class="duration-badge ongoing">en cours</span>'}</td>
+      <td>${l.ended_at ? '<span style="font-size:12px;color:var(--text2)">Terminée</span>' : '<span class="duration-badge ongoing">● Active</span>'}</td>
+    </tr>
+  `).join("");
+}
+
+function fmtDuration(s) {
+  if (s < 60) return `<span class="duration-badge">${s}s</span>`;
+  const m = Math.floor(s / 60), sec = s % 60;
+  if (m < 60) return `<span class="duration-badge">${m}m ${sec}s</span>`;
+  const h = Math.floor(m / 60), min = m % 60;
+  return `<span class="duration-badge">${h}h ${min}m</span>`;
+}
+
+// ── Modal utilisateurs ────────────────────────────────────────────
 function openModal() {
   modalMode = "create";
   document.getElementById("modalTitle").textContent = "Nouvel utilisateur";
@@ -120,7 +207,7 @@ function openModal() {
 
 function openPasswordModal(id, username) {
   modalMode = "password";
-  document.getElementById("modalTitle").textContent = `Nouveau mot de passe — ${username}`;
+  document.getElementById("modalTitle").textContent = `Mot de passe — ${username}`;
   document.getElementById("modalUserId").value = id;
   document.getElementById("modalUsername").value = username;
   document.getElementById("modalUsername").disabled = true;
@@ -131,9 +218,7 @@ function openPasswordModal(id, username) {
   document.getElementById("modalBg").style.display = "flex";
 }
 
-function closeModal() {
-  document.getElementById("modalBg").style.display = "none";
-}
+function closeModal() { document.getElementById("modalBg").style.display = "none"; }
 
 async function submitModal() {
   if (modalMode === "create") {
@@ -141,46 +226,37 @@ async function submitModal() {
     const password = document.getElementById("modalPassword").value;
     const role = document.getElementById("modalRole").value;
     if (!username || !password) return showToast("Remplissez tous les champs", "error");
-
-    const { res, data } = await api("/api/admin/users", {
-      method: "POST",
-      body: JSON.stringify({ username, password, role })
-    });
+    const { res, data } = await api("/api/admin/users", { method: "POST", body: JSON.stringify({ username, password, role }) });
     if (!res.ok) return showToast(data.error, "error");
     showToast("Utilisateur créé", "success");
   } else {
     const id = document.getElementById("modalUserId").value;
     const password = document.getElementById("modalPassword").value;
     if (!password || password.length < 6) return showToast("Minimum 6 caractères", "error");
-
-    const { res, data } = await api(`/api/admin/users/${id}/password`, {
-      method: "PUT",
-      body: JSON.stringify({ password })
-    });
+    const { res, data } = await api(`/api/admin/users/${id}/password`, { method: "PUT", body: JSON.stringify({ password }) });
     if (!res.ok) return showToast(data.error, "error");
     showToast("Mot de passe mis à jour", "success");
   }
-  closeModal();
-  loadAll();
+  closeModal(); loadAll();
 }
 
 async function deleteUser(id, username) {
-  if (!confirm(`Supprimer l'utilisateur "${username}" ?`)) return;
+  if (!confirm(`Supprimer "${username}" ?`)) return;
   const { res, data } = await api(`/api/admin/users/${id}`, { method: "DELETE" });
   if (!res.ok) return showToast(data.error, "error");
   showToast("Utilisateur supprimé", "success");
   loadAll();
 }
 
+// ── Helpers ───────────────────────────────────────────────────────
 function logout() { localStorage.clear(); location.href = "index.html"; }
-
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function fmtDate(s) { return new Date(s).toLocaleDateString("fr-FR", { day:"2-digit", month:"short", year:"numeric" }); }
+function fmtDateTime(s) { return new Date(s).toLocaleString("fr-FR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }); }
 
 function showToast(msg, type = "info") {
   const t = document.getElementById("toast");
-  t.textContent = msg;
-  t.className = "toast show " + type;
+  t.textContent = msg; t.className = "toast show " + type;
   setTimeout(() => t.className = "toast", 3000);
 }
 

@@ -33,6 +33,15 @@ db.exec(`
     owner_id INTEGER NOT NULL,
     created_at TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS session_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT NOT NULL,
+    user_a TEXT NOT NULL,
+    user_b TEXT,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    duration_seconds INTEGER
+  );
 `);
 
 const app = express();
@@ -66,7 +75,7 @@ function randomCode() {
   return code;
 }
 
-// Auth
+// ── Auth ─────────────────────────────────────────────────────────
 app.post("/api/login", (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: "Champs manquants" });
@@ -80,7 +89,7 @@ app.get("/api/me", authRequired, (req, res) => {
   res.json({ id: req.user.id, username: req.user.username, role: req.user.role });
 });
 
-// Sessions
+// ── Sessions ──────────────────────────────────────────────────────
 app.post("/api/sessions", authRequired, (req, res) => {
   const code = randomCode();
   db.prepare("INSERT INTO sessions (code, owner_id, created_at) VALUES (?, ?, ?)").run(code, req.user.id, new Date().toISOString());
@@ -94,7 +103,24 @@ app.post("/api/sessions/join", authRequired, (req, res) => {
   res.json({ ok: true });
 });
 
-// Admin
+// ── TURN config ───────────────────────────────────────────────────
+app.get("/api/turn-config", authRequired, (req, res) => {
+  const url = process.env.TURN_URL;
+  const username = process.env.TURN_USERNAME;
+  const credential = process.env.TURN_CREDENTIAL;
+  if (!url || !username || !credential) return res.json({ servers: [] });
+  res.json({
+    servers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+      { urls: `turn:${url}:3478`,              username, credential },
+      { urls: `turn:${url}:3478?transport=tcp`, username, credential },
+      { urls: `turn:${url}:443?transport=tcp`,  username, credential }
+    ]
+  });
+});
+
+// ── Admin ─────────────────────────────────────────────────────────
 app.get("/api/admin/users", adminRequired, (req, res) => {
   res.json(db.prepare("SELECT id, username, role, created_at FROM users ORDER BY created_at DESC").all());
 });
@@ -124,14 +150,23 @@ app.put("/api/admin/users/:id/password", adminRequired, (req, res) => {
 app.get("/api/admin/stats", adminRequired, (req, res) => {
   res.json({
     users: db.prepare("SELECT COUNT(*) as c FROM users").get().c,
-    sessions: db.prepare("SELECT COUNT(*) as c FROM sessions").get().c
+    sessions: db.prepare("SELECT COUNT(*) as c FROM sessions").get().c,
+    logs: db.prepare("SELECT COUNT(*) as c FROM session_logs").get().c
   });
 });
 
-// Socket.IO — Signaling WebRTC
+app.get("/api/admin/session-logs", adminRequired, (req, res) => {
+  const logs = db.prepare(`
+    SELECT * FROM session_logs ORDER BY started_at DESC LIMIT 100
+  `).all();
+  res.json(logs);
+});
+
+// ── Socket.IO — Signaling WebRTC ──────────────────────────────────
 const server = http.createServer(app);
 const io = new SocketIOServer(server, { cors: { origin: FRONTEND_ORIGIN } });
-const rooms = new Map();
+const rooms = new Map(); // code → [{ id, username }]
+const sessionStartTimes = new Map(); // code → { startedAt, userA, userB }
 
 io.use((socket, next) => {
   try { socket.user = jwt.verify(socket.handshake.auth.token, JWT_SECRET); next(); }
@@ -141,21 +176,45 @@ io.use((socket, next) => {
 io.on("connection", (socket) => {
   socket.on("join-session", ({ code }) => {
     code = code.toUpperCase();
+
+    // Quitter l'ancienne room proprement
+    if (socket.currentRoom && socket.currentRoom !== code) {
+      const oldRoom = rooms.get(socket.currentRoom);
+      if (oldRoom) {
+        const idx = oldRoom.findIndex(p => p.id === socket.id);
+        if (idx !== -1) oldRoom.splice(idx, 1);
+        if (oldRoom.length === 0) rooms.delete(socket.currentRoom);
+      }
+      socket.leave(socket.currentRoom);
+    }
+
     socket.join(code);
     socket.currentRoom = code;
     if (!rooms.has(code)) rooms.set(code, []);
     const room = rooms.get(code);
-    if (!room.find(p => p.id === socket.id)) room.push({ id: socket.id, username: socket.user.username });
 
-    // Dire au nouveau arrivant qui est déjà là
+    // Éviter les doublons
+    if (room.find(p => p.id === socket.id)) return;
+    room.push({ id: socket.id, username: socket.user.username });
+
     const others = room.filter(p => p.id !== socket.id);
-    if (others.length > 0) socket.emit("room-info", { peers: others });
 
-    // Prévenir les autres
-    socket.to(code).emit("peer-joined", { peerId: socket.id, username: socket.user.username });
+    if (others.length > 0) {
+      // Deuxième pair — envoyer room-info ET notifier le premier
+      socket.emit("room-info", { peers: others });
+      socket.to(code).emit("peer-joined", { peerId: socket.id, username: socket.user.username });
+
+      // Enregistrer le début de session dans les logs
+      const userA = others[0].username;
+      const userB = socket.user.username;
+      const startedAt = new Date().toISOString();
+      sessionStartTimes.set(code, { startedAt, userA, userB });
+      db.prepare("INSERT INTO session_logs (code, user_a, user_b, started_at) VALUES (?, ?, ?, ?)")
+        .run(code, userA, userB, startedAt);
+    }
+    // Premier pair : il attend juste peer-joined
   });
 
-  // Relayer signal WebRTC vers le bon socket
   socket.on("signal", ({ to, data }) => {
     io.to(to).emit("signal", { from: socket.id, data });
   });
@@ -168,6 +227,19 @@ io.on("connection", (socket) => {
     if (idx !== -1) {
       room.splice(idx, 1);
       socket.to(socket.currentRoom).emit("peer-left", { peerId: socket.id, username: socket.user.username });
+
+      // Clôturer le log de session si les deux étaient connectés
+      const sessionInfo = sessionStartTimes.get(socket.currentRoom);
+      if (sessionInfo) {
+        const endedAt = new Date().toISOString();
+        const duration = Math.round((new Date(endedAt) - new Date(sessionInfo.startedAt)) / 1000);
+        db.prepare(`
+          UPDATE session_logs SET ended_at = ?, duration_seconds = ?
+          WHERE code = ? AND ended_at IS NULL
+        `).run(endedAt, duration, socket.currentRoom);
+        sessionStartTimes.delete(socket.currentRoom);
+      }
+
       if (room.length === 0) rooms.delete(socket.currentRoom);
     }
   });

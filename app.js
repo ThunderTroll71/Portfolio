@@ -10,34 +10,51 @@ document.getElementById("usernameDisplay").textContent = localStorage.getItem("u
 const socket = io(API_URL, { auth: { token } });
 
 socket.on("connect_error", (err) => {
-  if (err.message === "Unauthorized") {
-    localStorage.clear();
-    location.href = "index.html";
-  }
+  if (err.message === "Unauthorized") { localStorage.clear(); location.href = "index.html"; }
 });
 
 // ── État ─────────────────────────────────────────────────────────
 let peer = null;
 let currentCode = null;
 let peerSocketId = null;
-let isInitiator = false;
 let receiveBuffers = [];
 let receiveSize = 0;
 let receiveMeta = null;
+let pendingSignals = [];
+let iceServers = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" }
+];
+
+// ── TURN config ───────────────────────────────────────────────────
+async function loadTurnConfig() {
+  try {
+    const res = await fetch(API_URL + "/api/turn-config", {
+      headers: { Authorization: "Bearer " + token }
+    });
+    const data = await res.json();
+    if (data.servers && data.servers.length > 0) iceServers = data.servers;
+  } catch (e) {
+    console.warn("[TURN] config non chargée, STUN seul", e);
+  }
+}
+
+loadTurnConfig();
 
 // ── Signaling ────────────────────────────────────────────────────
 socket.on("room-info", ({ peers }) => {
   if (peers.length > 0) {
     peerSocketId = peers[0].id;
     document.getElementById("peerName").textContent = peers[0].username;
-    startPeer(false);
+    setTimeout(() => startPeer(false), 300);
   }
 });
 
 socket.on("peer-joined", ({ peerId, username }) => {
+  if (peer) return; // déjà en cours, ignorer
   peerSocketId = peerId;
   document.getElementById("peerName").textContent = username;
-  startPeer(true);
+  setTimeout(() => startPeer(true), 300);
 });
 
 socket.on("peer-left", () => {
@@ -47,22 +64,21 @@ socket.on("peer-left", () => {
 
 socket.on("signal", ({ from, data }) => {
   peerSocketId = from;
-  if (peer) peer.signal(data);
+  if (peer) {
+    peer.signal(data);
+  } else {
+    pendingSignals.push({ from, data });
+  }
 });
 
 // ── SimplePeer ───────────────────────────────────────────────────
 function startPeer(initiator) {
-  isInitiator = initiator;
+  if (peer) return; // sécurité anti-doublon
+
   peer = new SimplePeer({
     initiator,
     trickle: true,
-    config: {
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-        { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" }
-      ]
-    }
+    config: { iceServers }
   });
 
   peer.on("signal", (data) => socket.emit("signal", { to: peerSocketId, data }));
@@ -75,15 +91,31 @@ function startPeer(initiator) {
   });
 
   peer.on("data", handleIncomingData);
-  peer.on("error", (err) => { console.error(err); showToast("Erreur de connexion P2P", "error"); resetTransferUI(); });
-  peer.on("close", resetTransferUI);
+
+  peer.on("error", (err) => {
+    console.error("[peer] erreur:", err);
+    showToast("Erreur de connexion P2P", "error");
+    resetTransferUI();
+  });
+
+  peer.on("close", () => {
+    resetTransferUI();
+  });
+
+  // Rejouer les signaux arrivés en avance
+  setTimeout(() => {
+    while (pendingSignals.length > 0) {
+      const s = pendingSignals.shift();
+      peerSocketId = s.from;
+      peer.signal(s.data);
+    }
+  }, 100);
 }
 
 // ── Réception ────────────────────────────────────────────────────
 function handleIncomingData(chunk) {
   if (typeof chunk === "string" || chunk instanceof String) {
-    processMessage(chunk.toString());
-    return;
+    processMessage(chunk.toString()); return;
   }
   const str = new TextDecoder().decode(chunk);
   if (str.startsWith("{")) {
@@ -136,7 +168,7 @@ async function sendFile(file) {
   }
 }
 
-// ── Icône par type ────────────────────────────────────────────────
+// ── Icônes ────────────────────────────────────────────────────────
 function fileIcon(name, mime) {
   if (mime && mime.startsWith("image/")) return "🖼️";
   if (mime === "application/pdf") return "📕";
@@ -151,11 +183,7 @@ function fileIcon(name, mime) {
 // ── Prévisualisation ──────────────────────────────────────────────
 function canPreview(name, mime) {
   if (!mime) return false;
-  if (mime.startsWith("image/")) return true;
-  if (mime.startsWith("text/")) return true;
-  if (mime === "application/pdf") return true;
-  if (mime === "application/json") return true;
-  return false;
+  return mime.startsWith("image/") || mime.startsWith("text/") || mime === "application/pdf" || mime === "application/json";
 }
 
 function openPreview(name, mime, blob) {
@@ -163,31 +191,20 @@ function openPreview(name, mime, blob) {
   const body = document.getElementById("previewBody");
   document.getElementById("previewFilename").textContent = name;
   body.innerHTML = "";
-
   const url = URL.createObjectURL(blob);
-
   if (mime.startsWith("image/")) {
     const img = document.createElement("img");
-    img.src = url;
-    img.alt = name;
-    body.appendChild(img);
+    img.src = url; img.alt = name; body.appendChild(img);
   } else if (mime === "application/pdf") {
     const iframe = document.createElement("iframe");
-    iframe.src = url;
-    iframe.title = name;
-    body.appendChild(iframe);
+    iframe.src = url; iframe.title = name; body.appendChild(iframe);
   } else if (mime.startsWith("text/") || mime === "application/json") {
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const pre = document.createElement("pre");
-      pre.textContent = e.target.result;
-      body.appendChild(pre);
-    };
+    reader.onload = (e) => { const pre = document.createElement("pre"); pre.textContent = e.target.result; body.appendChild(pre); };
     reader.readAsText(blob);
   } else {
-    body.innerHTML = `<div class="preview-unsupported"><div class="big">🚫</div><p>Prévisualisation non disponible pour ce type de fichier</p></div>`;
+    body.innerHTML = `<div class="preview-unsupported"><div class="big">🚫</div><p>Prévisualisation non disponible</p></div>`;
   }
-
   bg.style.display = "flex";
   document.body.style.overflow = "hidden";
 }
@@ -213,8 +230,7 @@ function escHtml(s) {
 function addSendItem(name, size) {
   const id = "s-" + Date.now();
   const el = document.createElement("div");
-  el.className = "file-item";
-  el.id = id;
+  el.className = "file-item"; el.id = id;
   el.innerHTML = `<span class="fi-icon">📤</span><div class="fi-info"><div class="fi-name">${escHtml(name)}</div><div class="fi-size">${fmtSize(size)}</div><div class="fi-bar-wrap"><div class="fi-bar" style="width:0%"></div></div></div>`;
   document.getElementById("sendList").appendChild(el);
   return id;
@@ -226,7 +242,6 @@ function updateSendProgress(id, ratio) {
 }
 
 let currentReceiveItemId = null;
-let currentReceiveBlob = null;
 
 function addReceiveProgressItem(name, size) {
   const el = document.querySelector("#receiveList .hint");
@@ -234,8 +249,7 @@ function addReceiveProgressItem(name, size) {
   const id = "r-" + Date.now();
   currentReceiveItemId = id;
   const div = document.createElement("div");
-  div.className = "file-item";
-  div.id = id;
+  div.className = "file-item"; div.id = id;
   div.innerHTML = `<span class="fi-icon">⬇️</span><div class="fi-info"><div class="fi-name">${escHtml(name)}</div><div class="fi-size">${fmtSize(size)}</div><div class="fi-bar-wrap"><div class="fi-bar" style="width:0%"></div></div></div>`;
   document.getElementById("receiveList").appendChild(div);
 }
@@ -251,16 +265,10 @@ function addReceivedFile(name, size, blob, mime) {
     const item = document.getElementById(currentReceiveItemId);
     if (item) {
       updateReceiveProgress(1);
-
-      // Changer l'icône selon le type
       const icon = item.querySelector(".fi-icon");
       if (icon) icon.textContent = fileIcon(name, mime);
-
-      // Boutons
       const actions = document.createElement("div");
       actions.className = "fi-actions";
-
-      // Bouton prévisualisation si possible
       if (canPreview(name, mime)) {
         const prevBtn = document.createElement("button");
         prevBtn.className = "btn-preview";
@@ -268,15 +276,12 @@ function addReceivedFile(name, size, blob, mime) {
         prevBtn.onclick = () => openPreview(name, mime, blob);
         actions.appendChild(prevBtn);
       }
-
-      // Bouton télécharger
       const link = document.createElement("a");
       link.className = "btn-dl";
       link.textContent = "⬇ Télécharger";
       link.href = URL.createObjectURL(blob);
       link.download = name;
       actions.appendChild(link);
-
       item.appendChild(actions);
     }
   }
@@ -287,8 +292,7 @@ function addReceivedFile(name, size, blob, mime) {
 // ── Actions ──────────────────────────────────────────────────────
 document.getElementById("createBtn").addEventListener("click", async () => {
   const btn = document.getElementById("createBtn");
-  btn.disabled = true;
-  btn.textContent = "...";
+  btn.disabled = true; btn.textContent = "...";
   try {
     const res = await fetch(API_URL + "/api/sessions", { method: "POST", headers: { Authorization: "Bearer " + token } });
     const data = await res.json();
@@ -302,8 +306,7 @@ document.getElementById("createBtn").addEventListener("click", async () => {
     socket.emit("join-session", { code: data.code });
   } catch (err) {
     showToast(err.message || "Erreur", "error");
-    btn.disabled = false;
-    btn.textContent = "Créer";
+    btn.disabled = false; btn.textContent = "Créer";
   }
 });
 
@@ -328,18 +331,15 @@ document.getElementById("joinBtn").addEventListener("click", async () => {
   }
 });
 
-// Rejoindre avec Entrée sur mobile
 document.getElementById("joinCode").addEventListener("keydown", e => {
   if (e.key === "Enter") document.getElementById("joinBtn").click();
 });
 
-// Drag & Drop
 const dropZone = document.getElementById("dropZone");
 dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("over"); });
 dropZone.addEventListener("dragleave", () => dropZone.classList.remove("over"));
 dropZone.addEventListener("drop", e => { e.preventDefault(); dropZone.classList.remove("over"); sendFiles(e.dataTransfer.files); });
 
-// Fermer preview avec Echap
 document.addEventListener("keydown", e => { if (e.key === "Escape") closePreview({}); });
 
 function copyCode() {
@@ -355,7 +355,7 @@ function resetTransferUI() {
   document.getElementById("createBtn").textContent = "Créer";
   document.getElementById("sendList").innerHTML = "";
   document.getElementById("receiveList").innerHTML = '<p class="hint" style="text-align:center;padding:20px">En attente de fichiers…</p>';
-  peer = null; currentCode = null; peerSocketId = null;
+  peer = null; currentCode = null; peerSocketId = null; pendingSignals = [];
 }
 
 function disconnect() { if (peer) peer.destroy(); resetTransferUI(); }
